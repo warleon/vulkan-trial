@@ -4,7 +4,6 @@
 #include <stdlib.h>
 #include "utils.h"
 
-static int isDeviceOkAndSetQueueIndex(Application*, VkPhysicalDevice);
 
 void init(Application* app, const char* name, const char* engineName, HINSTANCE hinstance, HWND hwnd) {
 	memset(app, 0, sizeof(Application));
@@ -89,20 +88,31 @@ void initPhisicalDevice(Application* app) {
 	err = vkEnumeratePhysicalDevices(app->vulkanInstance, &count, app->physicalDevices);
 	assert(!err);
 
-	uint32_t queueIndex = 0;
+	uint32_t ok = 0;
 	for (size_t i = 0; i < count; i++) {
-		queueIndex = isDeviceOkAndSetQueueIndex(app, app->physicalDevices[i]);
-		if (queueIndex) {
-			app->vulkanPhysicalDevice = app->physicalDevices[0];
+		ok = isDeviceOkAndSetQueueIndex(app, app->physicalDevices[i]);
+		if (ok) {
+			app->vulkanPhysicalDevice = app->physicalDevices[i];
 		}
 	}
-
-
+	assert(ok);
 }
 
 void initDevice(Application* app) {
 	VkResult err;
+	uint32_t count;
 	assert(app->graphicsQueueFamilyIndex);
+
+	err = vkEnumerateDeviceExtensionProperties(app->vulkanPhysicalDevice, NULL, &count, NULL);
+	assert(!err && count);
+	app->deviceExtensionProperties = malloc(sizeof(VkExtensionProperties) * count);
+	assert(app->deviceExtensionProperties);
+	err = vkEnumerateDeviceExtensionProperties(app->vulkanPhysicalDevice, NULL, &count, app->deviceExtensionProperties);
+	assert(!err);
+	app->deviceExtensionPropertiesNames = malloc(sizeof(char*) * count);
+	for (size_t i = 0; i < count; i++) {
+		app->deviceExtensionPropertiesNames[i] = &app->deviceExtensionProperties[i].extensionName;
+	}
 
 	app->graphicsQueueFamilyPriority = 1.0f;
 
@@ -119,6 +129,8 @@ void initDevice(Application* app) {
 	app->vulkanDeviceCreateInfo.pEnabledFeatures = &app->vulkanPhysicalDeviceFeatures;
 	app->vulkanDeviceCreateInfo.enabledLayerCount = app->enabledVulkanValidationLayersSize;
 	app->vulkanDeviceCreateInfo.ppEnabledLayerNames = app->enabledVulkanValidationLayers;
+	app->vulkanDeviceCreateInfo.ppEnabledExtensionNames = app->deviceExtensionPropertiesNames;
+	app->vulkanDeviceCreateInfo.enabledExtensionCount = ARRAYSIZE(app->deviceExtensionPropertiesNames);
 
 	err = vkCreateDevice(app->vulkanPhysicalDevice, &app->vulkanDeviceCreateInfo, NULL, &app->vulkanDevice);
 	assert(!err);
@@ -131,29 +143,49 @@ void destroy(Application* app) {
 	vkDestroyDevice(app->vulkanDevice, NULL);
 	vkDestroySurfaceKHR(app->vulkanInstance, app->vulkanSurface, NULL);
 	vkDestroyInstance(app->vulkanInstance, NULL);
-	//free(app->vulkanInstance);
+
 	free(app->properties);
 	free(app->layers);
+	free(app->physicalDevices);
+	free(app->deviceExtensionProperties);
 }
 
 int isDeviceOkAndSetQueueIndex(Application* app, VkPhysicalDevice device) {
-	VkPhysicalDeviceProperties properties;
-	VkPhysicalDeviceFeatures features;
-	vkGetPhysicalDeviceProperties(device, &properties);
-	vkGetPhysicalDeviceFeatures(device, &features);
-	//check for specific properties or features
-	//end of check
-
+	VkResult err;
 	uint32_t count = 0;
+	VkBool32 hasSupport = 0;
+	VkBool32 hasExtension = 0;
+	//	VkPhysicalDeviceProperties properties;
+	//	VkPhysicalDeviceFeatures features;
+	//	vkGetPhysicalDeviceProperties(device, &properties);
+	//	vkGetPhysicalDeviceFeatures(device, &features);
+
+	err = vkEnumerateDeviceExtensionProperties(device, NULL, &count, NULL);
+	assert(!err && count);
+	VkExtensionProperties* extensionProperties = malloc(sizeof(VkExtensionProperties) * count);
+	assert(extensionProperties);
+	err = vkEnumerateDeviceExtensionProperties(device, NULL, &count, extensionProperties);
+	assert(!err);
+	for (size_t i = 0; i < count; i++) {
+		hasExtension = hasExtension || !strcmp(VK_KHR_SWAPCHAIN_EXTENSION_NAME, extensionProperties[i].extensionName);
+	}
+	free(extensionProperties);
+
+	count = 0;
 	vkGetPhysicalDeviceQueueFamilyProperties(device, &count, NULL);
+	assert(!err);
 	assert(count);
 	VkQueueFamilyProperties* queueFamilyProperties = malloc(sizeof(VkQueueFamilyProperties) * count);
 	assert(queueFamilyProperties);
 	for (size_t i = 0; i < count; i++) {
 		if (queueFamilyProperties[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-			app->graphicsQueueFamilyIndex = i + 1;
+			err = vkGetPhysicalDeviceSurfaceSupportKHR(device, i, app->vulkanSurface, &hasSupport);
+			assert(!err);
+			if (hasSupport)
+				app->graphicsQueueFamilyIndex = i + 1;
 		}
 	}
 	free(queueFamilyProperties);
-	return app->graphicsQueueFamilyIndex;
+
+	return (app->graphicsQueueFamilyIndex > 0) && hasSupport && hasExtension;
 }

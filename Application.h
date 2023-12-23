@@ -35,6 +35,8 @@ typedef struct {
 	VkExtensionProperties* properties;
 	VkLayerProperties* layers;
 	VkPhysicalDevice* physicalDevices;
+	VkExtensionProperties* deviceExtensionProperties;
+	char** deviceExtensionPropertiesNames;
 
 
 }	Application;
@@ -46,3 +48,5 @@ void initSurface(Application*);
 void initPhisicalDevice(Application*);
 void initDevice(Application*);
 void destroy(Application*);
+
+int isDeviceOkAndSetQueueIndex(Application*, VkPhysicalDevice);

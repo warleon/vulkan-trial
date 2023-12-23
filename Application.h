@@ -17,6 +17,16 @@ typedef struct {
 	VkSurfaceKHR vulkanSurface;
 	VkWin32SurfaceCreateInfoKHR vulkanSurfaceCreateInfo;
 
+	VkPhysicalDevice vulkanPhysicalDevice;
+	VkPhysicalDeviceFeatures vulkanPhysicalDeviceFeatures;
+
+	VkDevice vulkanDevice;
+	VkDeviceCreateInfo vulkanDeviceCreateInfo;
+	VkQueue vulkanQueue[1];
+	VkDeviceQueueCreateInfo vulkanDeviceQueueCreateInfo[1];
+	uint32_t graphicsQueueFamilyIndex;// = realindex+1
+	float graphicsQueueFamilyPriority;
+
 	uint32_t enabledVulkanGlobalExtensionsSize;
 	uint32_t enabledVulkanValidationLayersSize;
 	char* enabledVulkanGlobalExtensions[64];
@@ -24,6 +34,8 @@ typedef struct {
 
 	VkExtensionProperties* properties;
 	VkLayerProperties* layers;
+	VkPhysicalDevice* physicalDevices;
+
 
 }	Application;
 
@@ -31,4 +43,6 @@ typedef struct {
 void init(Application*, const char*, const char*, HINSTANCE hinstance, HWND hwnd);
 void initInstance(Application*);
 void initSurface(Application*);
+void initPhisicalDevice(Application*);
+void initDevice(Application*);
 void destroy(Application*);

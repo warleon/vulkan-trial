@@ -2,8 +2,9 @@
 #include <assert.h>
 #include <string.h>
 #include <stdlib.h>
-//#include "utils.h"
+#include "utils.h"
 
+static int isDeviceOkAndSetQueueIndex(Application*, VkPhysicalDevice);
 
 void init(Application* app, const char* name, const char* engineName, HINSTANCE hinstance, HWND hwnd) {
 	memset(app, 0, sizeof(Application));
@@ -14,6 +15,8 @@ void init(Application* app, const char* name, const char* engineName, HINSTANCE 
 
 	initInstance(app);
 	initSurface(app);
+	initPhisicalDevice(app);
+	initDevice(app);
 }
 void initInstance(Application* app) {
 	VkResult err;
@@ -76,12 +79,81 @@ void initSurface(Application* app) {
 	assert(!(err == VK_ERROR_OUT_OF_HOST_MEMORY));
 	assert(!(err == VK_ERROR_OUT_OF_DEVICE_MEMORY));
 }
+void initPhisicalDevice(Application* app) {
+	VkResult err;
+	uint32_t count;
+	err = vkEnumeratePhysicalDevices(app->vulkanInstance, &count, NULL);
+	assert(!err && count);
+	app->physicalDevices = malloc(sizeof(VkPhysicalDevice) * count);
+	assert(app->physicalDevices);
+	err = vkEnumeratePhysicalDevices(app->vulkanInstance, &count, app->physicalDevices);
+	assert(!err);
+
+	uint32_t queueIndex = 0;
+	for (size_t i = 0; i < count; i++) {
+		queueIndex = isDeviceOkAndSetQueueIndex(app, app->physicalDevices[i]);
+		if (queueIndex) {
+			app->vulkanPhysicalDevice = app->physicalDevices[0];
+		}
+	}
+
+
+}
+
+void initDevice(Application* app) {
+	VkResult err;
+	assert(app->graphicsQueueFamilyIndex);
+
+	app->graphicsQueueFamilyPriority = 1.0f;
+
+	app->vulkanDeviceQueueCreateInfo[0].sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+	app->vulkanDeviceQueueCreateInfo[0].queueFamilyIndex = app->graphicsQueueFamilyIndex - 1;
+	app->vulkanDeviceQueueCreateInfo[0].queueCount = 1;
+	app->vulkanDeviceQueueCreateInfo[0].pQueuePriorities = &app->graphicsQueueFamilyPriority;
+
+	vkGetPhysicalDeviceFeatures(app->vulkanPhysicalDevice, &app->vulkanPhysicalDeviceFeatures);
+
+	app->vulkanDeviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+	app->vulkanDeviceCreateInfo.pQueueCreateInfos = app->vulkanDeviceQueueCreateInfo;
+	app->vulkanDeviceCreateInfo.queueCreateInfoCount = ARRAY_SIZE(app->vulkanDeviceQueueCreateInfo);
+	app->vulkanDeviceCreateInfo.pEnabledFeatures = &app->vulkanPhysicalDeviceFeatures;
+	app->vulkanDeviceCreateInfo.enabledLayerCount = app->enabledVulkanValidationLayersSize;
+	app->vulkanDeviceCreateInfo.ppEnabledLayerNames = app->enabledVulkanValidationLayers;
+
+	err = vkCreateDevice(app->vulkanPhysicalDevice, &app->vulkanDeviceCreateInfo, NULL, &app->vulkanDevice);
+	assert(!err);
+
+	vkGetDeviceQueue(app->vulkanDevice, app->graphicsQueueFamilyIndex - 1, 0, &app->vulkanQueue[0]);
+}
 
 
 void destroy(Application* app) {
+	vkDestroyDevice(app->vulkanDevice, NULL);
 	vkDestroySurfaceKHR(app->vulkanInstance, app->vulkanSurface, NULL);
 	vkDestroyInstance(app->vulkanInstance, NULL);
 	//free(app->vulkanInstance);
 	free(app->properties);
 	free(app->layers);
+}
+
+int isDeviceOkAndSetQueueIndex(Application* app, VkPhysicalDevice device) {
+	VkPhysicalDeviceProperties properties;
+	VkPhysicalDeviceFeatures features;
+	vkGetPhysicalDeviceProperties(device, &properties);
+	vkGetPhysicalDeviceFeatures(device, &features);
+	//check for specific properties or features
+	//end of check
+
+	uint32_t count = 0;
+	vkGetPhysicalDeviceQueueFamilyProperties(device, &count, NULL);
+	assert(count);
+	VkQueueFamilyProperties* queueFamilyProperties = malloc(sizeof(VkQueueFamilyProperties) * count);
+	assert(queueFamilyProperties);
+	for (size_t i = 0; i < count; i++) {
+		if (queueFamilyProperties[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+			app->graphicsQueueFamilyIndex = i + 1;
+		}
+	}
+	free(queueFamilyProperties);
+	return app->graphicsQueueFamilyIndex;
 }

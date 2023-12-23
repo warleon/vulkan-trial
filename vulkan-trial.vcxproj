@@ -135,6 +135,7 @@
   <ItemGroup>
     <ClCompile Include="Application.c" />
     <ClCompile Include="main.c" />
+    <ClCompile Include="utils.h" />
     <ClCompile Include="vulkan.c" />
   </ItemGroup>
   <ItemGroup>

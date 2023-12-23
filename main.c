@@ -1,20 +1,17 @@
+#define _CRT_SECURE_NO_WARNINGS
 #include <windows.h>
 #include <vulkan/vulkan.h>
 #include <stdio.h>
 #include <wchar.h>
+#include "Application.h"
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
+WCHAR buffer[256 * 16] = { 0 };
 
-WCHAR buffer[200];
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 	PSTR szCmdLine, int iCmdShow)
 {
-
-	int count = 0;
-	vkEnumerateInstanceExtensionProperties(NULL, &count, NULL);
-	wsprintf(buffer, L"%d extensions available", count);
-
-
-	static TCHAR szAppName[] = TEXT("HelloWin");
+	Application app;
+	static TCHAR szAppName[] = TEXT("Vulkan Trial");
 	HWND hwnd;
 	MSG msg = {
 		.wParam = 0,
@@ -27,12 +24,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 		.hInstance = hInstance,
 		.hIcon = LoadIcon(NULL, IDI_APPLICATION),
 		.hCursor = LoadCursor(NULL, IDC_ARROW),
-		.hbrBackground = (HBRUSH)GetStockObject(WHITE_BRUSH),
+		.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH),
 		.lpszMenuName = NULL,
 		.lpszClassName = szAppName,
 	};
-	if (!RegisterClass(&wndclass))
-	{
+	if (!RegisterClass(&wndclass)) {
 		MessageBox(NULL, TEXT("This program requires Windows NT!"),
 			szAppName, MB_ICONERROR);
 		return 0;
@@ -49,6 +45,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 		hInstance, // program instance handle
 		NULL); // creation parameters
 
+	init(&app, "Vulkan Trial", "No Engine", hInstance, hwnd);
+
 	ShowWindow(hwnd, iCmdShow);
 	UpdateWindow(hwnd);
 
@@ -57,6 +55,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 		TranslateMessage(&msg);
 		DispatchMessage(&msg);
 	}
+
+	destroy(&app);
 	return msg.wParam;
 }
 LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
@@ -75,8 +75,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 		GetClientRect(hwnd, &rect);
 
-		DrawText(hdc, buffer, -1, &rect,
-			DT_SINGLELINE | DT_CENTER | DT_VCENTER);
+		//DrawText(hdc, buffer, -1, &rect, DT_SINGLELINE | DT_CENTER | DT_VCENTER);
 		EndPaint(hwnd, &ps);
 		return 0;
 

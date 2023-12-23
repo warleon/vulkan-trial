@@ -1,18 +1,34 @@
 #pragma once
 #include <vulkan/vulkan.h>
+#include <Windows.h>
+#include <vulkan/vulkan_win32.h>
 
 typedef struct {
-	char const* name;
-	char const* engineName;
+	char* name;
+	char* engineName;
+
+	HINSTANCE hinstance;
+	HWND hwnd;
+
 	VkInstance vulkanInstance;
 	VkApplicationInfo vulkanApplicationInfo;
 	VkInstanceCreateInfo vulkanInstanceCreateInfo;
-	char* enabledVulkanGlobalExtensions[64];
-	char* enabledVulkanValidationLayers[64];
+
+	VkSurfaceKHR vulkanSurface;
+	VkWin32SurfaceCreateInfoKHR vulkanSurfaceCreateInfo;
+
 	uint32_t enabledVulkanGlobalExtensionsSize;
 	uint32_t enabledVulkanValidationLayersSize;
-}
-Application;
+	char* enabledVulkanGlobalExtensions[64];
+	char* enabledVulkanValidationLayers[64];
+
+	VkExtensionProperties* properties;
+	VkLayerProperties* layers;
+
+}	Application;
 
 
-void applicationInit(Application*, char*, char*);
+void init(Application*, const char*, const char*, HINSTANCE hinstance, HWND hwnd);
+void initInstance(Application*);
+void initSurface(Application*);
+void destroy(Application*);

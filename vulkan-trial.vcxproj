@@ -141,6 +141,10 @@
   <ItemGroup>
     <ClInclude Include="Application.h" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="shader\frag.spv" />
+    <None Include="shader\vert.spv" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

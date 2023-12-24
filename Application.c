@@ -1,5 +1,6 @@
 #include "Application.h"
 #include <assert.h>
+#include<stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include "utils.h"
@@ -17,6 +18,8 @@ void init(Application* app, const char* name, const char* engineName, HINSTANCE 
 	initPhisicalDevice(app);
 	initDevice(app);
 	initSwapChain(app);
+	initRenderPass(app);
+	initGraphicsPipeline(app);
 }
 void initInstance(Application* app) {
 	VkResult err;
@@ -213,7 +216,80 @@ void initSwapChain(Application* app) {
 	assert(!err);
 }
 
+void initImageViews(Application* app) {
+	VkResult err = VK_SUCCESS;
+
+	app->vulkanSwapChainImageViewsSize = app->vulkanSwapChainImagesSize;
+	app->vulkanSwapChainImageViews = malloc(sizeof(VkImageView) * app->vulkanSwapChainImageViewsSize);
+	assert(app->vulkanSwapChainImageViews);
+	for (size_t i = 0; i < app->vulkanSwapChainImageViewsSize; i++) {
+		VkImageViewCreateInfo createInfo;
+		memset(&createInfo, 0, sizeof(createInfo));
+		createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+		createInfo.image = app->vulkanSwapChainImages[i];
+		createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+		createInfo.format = app->vulkanSurfaceChosenFormat.format;
+		createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+		createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+		createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+		createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+		createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		createInfo.subresourceRange.baseMipLevel = 0;
+		createInfo.subresourceRange.levelCount = 1;
+		createInfo.subresourceRange.baseArrayLayer = 0;
+		createInfo.subresourceRange.layerCount = 1;
+
+		err = vkCreateImageView(app->vulkanDevice, &createInfo, NULL, &app->vulkanSwapChainImageViews);
+		assert(!err);
+
+	}
+}
+void initRenderPass(Application* app) {
+	VkResult err = VK_SUCCESS;
+
+	VkAttachmentDescription colorAttachment;
+	memset(&colorAttachment, 0, sizeof(colorAttachment));
+	colorAttachment.format = app->vulkanSurfaceChosenFormat.format;
+	colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+	colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+	VkAttachmentReference colorAttachmentRef;
+	memset(&colorAttachmentRef, 0, sizeof(colorAttachmentRef));
+	colorAttachmentRef.attachment = 0;
+	colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+	VkSubpassDescription subpass;
+	memset(&subpass, 0, sizeof(subpass));
+	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+	subpass.colorAttachmentCount = 1;
+	subpass.pColorAttachments = &colorAttachmentRef;
+
+	VkRenderPassCreateInfo renderPassCreateInfo;
+	memset(&renderPassCreateInfo, 0, sizeof(renderPassCreateInfo));
+	renderPassCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+	renderPassCreateInfo.attachmentCount = 1;
+	renderPassCreateInfo.pAttachments = &colorAttachment;
+	renderPassCreateInfo.subpassCount = 1;
+	renderPassCreateInfo.pSubpasses = &subpass;
+
+	err = vkCreateRenderPass(app->vulkanDevice, &renderPassCreateInfo, NULL, &app->vulkanRenderPass);
+	assert(!err);
+
+}
+
+void initGraphicsPipeline(Application* app) {
+}
+
 void destroy(Application* app) {
+	vkDestroyRenderPass(app->vulkanDevice, app->vulkanRenderPass, NULL);
+	for (size_t i = 0; i < app->vulkanSwapChainImageViewsSize; i++) {
+		vkDestroyImageView(app->vulkanDevice, app->vulkanSwapChainImageViews[i], NULL);
+	}
 	vkDestroySwapchainKHR(app->vulkanDevice, app->vulkanSwapChain, NULL);
 	vkDestroyDevice(app->vulkanDevice, NULL);
 	vkDestroySurfaceKHR(app->vulkanInstance, app->vulkanSurface, NULL);
@@ -237,6 +313,40 @@ void getWindowSize(Application* app, int* width, int* height) {
 	*height = rect.bottom - rect.top;
 }
 
+void loadShaders(Application* app) {
+	FILE* vertexFile = fopen("shader/vert.spv", "ab+");
+	FILE* fragmeFile = fopen("shader/frag.spv", "ab+");
+	assert(vertexFile && fragmeFile);
+	size_t vertexSize = ftell(vertexFile);
+	size_t fragmeSize = ftell(fragmeFile);
+	assert(vertexSize && fragmeSize);
+	char* vertexProgram = malloc(sizeof(char) * vertexSize);
+	char* fragmeProgram = malloc(sizeof(char) * vertexSize);
+	assert(vertexProgram && fragmeProgram);
+	rewind(vertexFile);
+	for (size_t i = 0; i < vertexSize; i++) {
+		vertexProgram[i] = getc(vertexFile);
+	}
+	rewind(fragmeFile);
+	for (size_t i = 0; i < fragmeSize; i++) {
+		fragmeProgram[i] = getc(fragmeFile);
+	}
+	VkShaderModuleCreateInfo shadersInfo[2];
+	memset(shadersInfo, 0, ARRAY_SIZE(shadersInfo));
+	shadersInfo[0].sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	shadersInfo[1].sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+
+	shadersInfo[0].codeSize = vertexSize;
+	shadersInfo[0].pCode = vertexProgram;
+	shadersInfo[1].codeSize = fragmeSize;
+	shadersInfo[1].pCode = fragmeProgram;
+
+	vkCreateShaderModule(app->vulkanDevice, &shadersInfo[0], NULL, &app->vulkanShaderModules[0]);
+	vkCreateShaderModule(app->vulkanDevice, &shadersInfo[1], NULL, &app->vulkanShaderModules[1]);
+
+	free(vertexProgram);
+	free(fragmeFile);
+}
 
 int isDeviceOkAndSetQueueIndex(Application* app, VkPhysicalDevice device) {
 	VkResult err;

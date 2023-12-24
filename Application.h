@@ -29,8 +29,13 @@ typedef struct {
 	VkSwapchainCreateInfoKHR vulkanSwapChainCreateInfo;
 
 	VkImage* vulkanSwapChainImages;
+	VkImageView* vulkanSwapChainImageViews;
 	uint32_t vulkanSwapChainImagesSize;
+	uint32_t vulkanSwapChainImageViewsSize;
 
+	VkRenderPass vulkanRenderPass;
+	VkPipelineLayout vulkanPipelineLayout;
+	VkShaderModule vulkanShaderModules[2];
 
 
 	VkPhysicalDevice vulkanPhysicalDevice;
@@ -64,9 +69,14 @@ void initSurface(Application*);
 void initPhisicalDevice(Application*);
 void initDevice(Application*);
 void initSwapChain(Application*);
+void initImageViews(Application*);
+void initRenderPass(Application*);
+void initGraphicsPipeline(Application*);
 void destroy(Application*);
 
 void getWindowSize(Application*, int*, int*);
+void loadShaders(Application*);
+
 
 
 int isDeviceOkAndSetQueueIndex(Application*, VkPhysicalDevice);

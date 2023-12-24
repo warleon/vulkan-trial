@@ -205,6 +205,12 @@ void initSwapChain(Application* app) {
 	err = vkCreateSwapchainKHR(app->vulkanDevice, &app->vulkanSwapChainCreateInfo, NULL, &app->vulkanSwapChain);
 	assert(!err);
 
+	err = vkGetSwapchainImagesKHR(app->vulkanDevice, app->vulkanSwapChain, &app->vulkanSwapChainImagesSize, NULL);
+	assert(!err && app->vulkanSwapChainImagesSize);
+	app->vulkanSwapChainImages = malloc(sizeof(VkImage) * app->vulkanSwapChainImagesSize);
+	assert(app->vulkanSwapChainImages);
+	err = vkGetSwapchainImagesKHR(app->vulkanDevice, app->vulkanSwapChain, &app->vulkanSwapChainImagesSize, app->vulkanSwapChainImages);
+	assert(!err);
 }
 
 void destroy(Application* app) {
@@ -217,6 +223,7 @@ void destroy(Application* app) {
 	free(app->layers);
 	free(app->physicalDevices);
 	free(app->deviceExtensionProperties);
+	free(app->vulkanSwapChainImages);
 }
 
 

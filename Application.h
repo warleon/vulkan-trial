@@ -28,6 +28,9 @@ typedef struct {
 	VkSwapchainKHR vulkanSwapChain;
 	VkSwapchainCreateInfoKHR vulkanSwapChainCreateInfo;
 
+	VkImage* vulkanSwapChainImages;
+	uint32_t vulkanSwapChainImagesSize;
+
 
 
 	VkPhysicalDevice vulkanPhysicalDevice;

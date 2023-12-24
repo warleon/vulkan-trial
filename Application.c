@@ -16,6 +16,7 @@ void init(Application* app, const char* name, const char* engineName, HINSTANCE 
 	initSurface(app);
 	initPhisicalDevice(app);
 	initDevice(app);
+	initSwapChain(app);
 }
 void initInstance(Application* app) {
 	VkResult err;
@@ -110,6 +111,7 @@ void initDevice(Application* app) {
 	err = vkEnumerateDeviceExtensionProperties(app->vulkanPhysicalDevice, NULL, &count, app->deviceExtensionProperties);
 	assert(!err);
 	app->deviceExtensionPropertiesNames = malloc(sizeof(char*) * count);
+	assert(app->deviceExtensionPropertiesNames);
 	for (size_t i = 0; i < count; i++) {
 		app->deviceExtensionPropertiesNames[i] = &app->deviceExtensionProperties[i].extensionName;
 	}
@@ -130,7 +132,7 @@ void initDevice(Application* app) {
 	app->vulkanDeviceCreateInfo.enabledLayerCount = app->enabledVulkanValidationLayersSize;
 	app->vulkanDeviceCreateInfo.ppEnabledLayerNames = app->enabledVulkanValidationLayers;
 	app->vulkanDeviceCreateInfo.ppEnabledExtensionNames = app->deviceExtensionPropertiesNames;
-	app->vulkanDeviceCreateInfo.enabledExtensionCount = ARRAYSIZE(app->deviceExtensionPropertiesNames);
+	app->vulkanDeviceCreateInfo.enabledExtensionCount = count;
 
 	err = vkCreateDevice(app->vulkanPhysicalDevice, &app->vulkanDeviceCreateInfo, NULL, &app->vulkanDevice);
 	assert(!err);
@@ -138,8 +140,75 @@ void initDevice(Application* app) {
 	vkGetDeviceQueue(app->vulkanDevice, app->graphicsQueueFamilyIndex - 1, 0, &app->vulkanQueue[0]);
 }
 
+void initSwapChain(Application* app) {
+	VkResult err = VK_SUCCESS;
+	querySwapChainSupport(app, app->vulkanPhysicalDevice);
+
+	app->vulkanSurfaceChosenFormat = app->vulkanSurfaceFormats[0];
+	app->VulkanSurfaceChosenPresentMode = VK_PRESENT_MODE_FIFO_KHR;
+
+	for (size_t i = 0; i < app->vulkanSurfaceFormatsSize; i++) {
+		if (
+			app->vulkanSurfaceFormats[i].format == VK_FORMAT_B8G8R8A8_SRGB &&
+			&app->vulkanSurfaceFormats[i].colorSpace
+			) {
+			app->vulkanSurfaceChosenFormat = app->vulkanSurfaceFormats[i];
+		}
+	}
+	for (size_t i = 0; i < app->vulkanSurfacePresentModesSize; i++) {
+		if (app->vulkanSurfacePresentModes[i] == VK_PRESENT_MODE_MAILBOX_KHR) {
+			app->VulkanSurfaceChosenPresentMode = app->vulkanSurfacePresentModes[i];
+		}
+	}
+
+	if (app->vulkanSurfaceCapabilities.currentExtent.width != (uint32_t)-1) {
+		app->vulkanSurfaceExtent = app->vulkanSurfaceCapabilities.currentExtent;
+	}
+	else {
+		unsigned int width = 0, height = 0;
+		getWindowSize(app, &width, &height);
+
+		clamp(&width,
+			app->vulkanSurfaceCapabilities.minImageExtent.width,
+			app->vulkanSurfaceCapabilities.maxImageExtent.width
+		);
+		clamp(&height,
+			app->vulkanSurfaceCapabilities.minImageExtent.height,
+			app->vulkanSurfaceCapabilities.maxImageExtent.height
+		);
+		app->vulkanSurfaceExtent.width = width;
+		app->vulkanSurfaceExtent.height = height;
+	}
+
+	uint32_t imageCount = app->vulkanSurfaceCapabilities.minImageCount + 1;
+	if (app->vulkanSurfaceCapabilities.maxImageCount > 0 &&
+		imageCount > app->vulkanSurfaceCapabilities.maxImageCount
+		)
+		imageCount = app->vulkanSurfaceCapabilities.maxImageCount;
+
+
+	app->vulkanSwapChainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+	app->vulkanSwapChainCreateInfo.surface = app->vulkanSurface;
+	app->vulkanSwapChainCreateInfo.minImageCount = imageCount;
+	app->vulkanSwapChainCreateInfo.imageFormat = app->vulkanSurfaceChosenFormat.format;
+	app->vulkanSwapChainCreateInfo.imageColorSpace = app->vulkanSurfaceChosenFormat.colorSpace;
+	app->vulkanSwapChainCreateInfo.imageExtent = app->vulkanSurfaceExtent;
+	app->vulkanSwapChainCreateInfo.imageArrayLayers = 1;
+	app->vulkanSwapChainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+	app->vulkanSwapChainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	app->vulkanSwapChainCreateInfo.preTransform = app->vulkanSurfaceCapabilities.currentTransform;
+	app->vulkanSwapChainCreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+	app->vulkanSwapChainCreateInfo.presentMode = app->VulkanSurfaceChosenPresentMode;
+	app->vulkanSwapChainCreateInfo.clipped = VK_TRUE;
+	app->vulkanSwapChainCreateInfo.oldSwapchain = VK_NULL_HANDLE;
+
+	err = vkCreateSwapchainKHR(app->vulkanDevice, &app->vulkanSwapChainCreateInfo, NULL, &app->vulkanSwapChain);
+	assert(!err);
+
+}
 
 void destroy(Application* app) {
+	vkDestroySwapchainKHR(app->vulkanDevice, app->vulkanSwapChain, NULL);
 	vkDestroyDevice(app->vulkanDevice, NULL);
 	vkDestroySurfaceKHR(app->vulkanInstance, app->vulkanSurface, NULL);
 	vkDestroyInstance(app->vulkanInstance, NULL);
@@ -150,11 +219,26 @@ void destroy(Application* app) {
 	free(app->deviceExtensionProperties);
 }
 
+
+void getWindowSize(Application* app, int* width, int* height) {
+	BOOL succeed = 0;
+	RECT rect;
+	succeed = GetWindowRect(app->hwnd, &rect);
+	assert(succeed);
+
+	*width = rect.right - rect.left;
+	*height = rect.bottom - rect.top;
+}
+
+
 int isDeviceOkAndSetQueueIndex(Application* app, VkPhysicalDevice device) {
 	VkResult err;
 	uint32_t count = 0;
-	VkBool32 hasSupport = 0;
+	VkBool32 hasSurfaceSupport = 0;
 	VkBool32 hasExtension = 0;
+	VkBool32 hasSwapChainSupport = 0;
+
+
 	//	VkPhysicalDeviceProperties properties;
 	//	VkPhysicalDeviceFeatures features;
 	//	vkGetPhysicalDeviceProperties(device, &properties);
@@ -179,13 +263,45 @@ int isDeviceOkAndSetQueueIndex(Application* app, VkPhysicalDevice device) {
 	assert(queueFamilyProperties);
 	for (size_t i = 0; i < count; i++) {
 		if (queueFamilyProperties[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-			err = vkGetPhysicalDeviceSurfaceSupportKHR(device, i, app->vulkanSurface, &hasSupport);
+			err = vkGetPhysicalDeviceSurfaceSupportKHR(device, i, app->vulkanSurface, &hasSurfaceSupport);
 			assert(!err);
-			if (hasSupport)
-				app->graphicsQueueFamilyIndex = i + 1;
+			if (hasSurfaceSupport) {
+				querySwapChainSupport(app, device);
+				hasSwapChainSupport = app->vulkanSurfaceFormats && app->vulkanSurfacePresentModes;
+				unquerySwapChainSupport(app);
+				if (hasSwapChainSupport)
+					app->graphicsQueueFamilyIndex = i + 1;
+			}
 		}
 	}
 	free(queueFamilyProperties);
 
-	return (app->graphicsQueueFamilyIndex > 0) && hasSupport && hasExtension;
+
+	return (app->graphicsQueueFamilyIndex > 0) && hasSurfaceSupport && hasExtension;
+}
+
+void querySwapChainSupport(Application* app, VkPhysicalDevice device) {
+	VkResult err;
+	err = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, app->vulkanSurface, &app->vulkanSurfaceCapabilities);
+	assert(!err);
+	err = vkGetPhysicalDeviceSurfaceFormatsKHR(device, app->vulkanSurface, &app->vulkanSurfaceFormatsSize, NULL);
+	assert(!err && app->vulkanSurfaceFormatsSize);
+	app->vulkanSurfaceFormats = malloc(sizeof(VkSurfaceFormatKHR) * app->vulkanSurfaceFormatsSize);
+	assert(app->vulkanSurfaceFormats);
+	err = vkGetPhysicalDeviceSurfaceFormatsKHR(device, app->vulkanSurface, &app->vulkanSurfaceFormatsSize, app->vulkanSurfaceFormats);
+	assert(!err);
+	err = vkGetPhysicalDeviceSurfacePresentModesKHR(device, app->vulkanSurface, &app->vulkanSurfacePresentModesSize, NULL);
+	assert(!err && app->vulkanSurfacePresentModesSize);
+	app->vulkanSurfacePresentModes = malloc(sizeof(VkPresentModeKHR) * app->vulkanSurfacePresentModesSize);
+	assert(app->vulkanSurfacePresentModes);
+	err = vkGetPhysicalDeviceSurfacePresentModesKHR(device, app->vulkanSurface, &app->vulkanSurfacePresentModesSize, app->vulkanSurfacePresentModes);
+	assert(!err);
+}
+void unquerySwapChainSupport(Application* app) {
+	if (app->vulkanSurfaceFormats)
+		free(app->vulkanSurfaceFormats);
+	app->vulkanSurfaceFormats = NULL;
+	if (app->vulkanSurfacePresentModes)
+		free(app->vulkanSurfacePresentModes);
+	app->vulkanSurfacePresentModes = NULL;
 }

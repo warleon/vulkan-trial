@@ -16,6 +16,19 @@ typedef struct {
 
 	VkSurfaceKHR vulkanSurface;
 	VkWin32SurfaceCreateInfoKHR vulkanSurfaceCreateInfo;
+	VkSurfaceCapabilitiesKHR vulkanSurfaceCapabilities;
+	VkSurfaceFormatKHR vulkanSurfaceChosenFormat;
+	VkPresentModeKHR VulkanSurfaceChosenPresentMode;
+	VkSurfaceFormatKHR* vulkanSurfaceFormats;
+	VkPresentModeKHR* vulkanSurfacePresentModes;
+	uint32_t vulkanSurfaceFormatsSize;
+	uint32_t vulkanSurfacePresentModesSize;
+	VkExtent2D vulkanSurfaceExtent;
+
+	VkSwapchainKHR vulkanSwapChain;
+	VkSwapchainCreateInfoKHR vulkanSwapChainCreateInfo;
+
+
 
 	VkPhysicalDevice vulkanPhysicalDevice;
 	VkPhysicalDeviceFeatures vulkanPhysicalDeviceFeatures;
@@ -47,6 +60,12 @@ void initInstance(Application*);
 void initSurface(Application*);
 void initPhisicalDevice(Application*);
 void initDevice(Application*);
+void initSwapChain(Application*);
 void destroy(Application*);
 
+void getWindowSize(Application*, int*, int*);
+
+
 int isDeviceOkAndSetQueueIndex(Application*, VkPhysicalDevice);
+void querySwapChainSupport(Application*, VkPhysicalDevice);
+void unquerySwapChainSupport(Application*);

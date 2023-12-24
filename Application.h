@@ -34,6 +34,7 @@ typedef struct {
 	uint32_t vulkanSwapChainImageViewsSize;
 
 	VkRenderPass vulkanRenderPass;
+	VkPipeline vulkanGraphicsPipeline;
 	VkPipelineLayout vulkanPipelineLayout;
 	VkShaderModule vulkanShaderModules[2];
 

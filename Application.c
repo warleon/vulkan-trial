@@ -1,3 +1,4 @@
+#define _CRT_SECURE_NO_WARNINGS
 #include "Application.h"
 #include <assert.h>
 #include<stdio.h>
@@ -283,9 +284,153 @@ void initRenderPass(Application* app) {
 }
 
 void initGraphicsPipeline(Application* app) {
+	VkResult err = VK_SUCCESS;
+	loadShaders(app);
+
+	VkPipelineShaderStageCreateInfo shaderStageInfos[2];
+	memset(shaderStageInfos, 0, sizeof(shaderStageInfos));
+	shaderStageInfos[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	shaderStageInfos[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+	shaderStageInfos[0].module = app->vulkanShaderModules[0];
+	shaderStageInfos[0].pName = "main";
+
+	shaderStageInfos[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	shaderStageInfos[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+	shaderStageInfos[1].module = app->vulkanShaderModules[1];
+	shaderStageInfos[1].pName = "main";
+
+
+	VkDynamicState dynamicStates[] = { VK_DYNAMIC_STATE_VIEWPORT,VK_DYNAMIC_STATE_SCISSOR };
+	VkPipelineDynamicStateCreateInfo dynamicStateCreateInfo;
+	memset(&dynamicStateCreateInfo, 0, sizeof(dynamicStateCreateInfo));
+	dynamicStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+	dynamicStateCreateInfo.dynamicStateCount = ARRAY_SIZE(dynamicStates);
+	dynamicStateCreateInfo.pDynamicStates = dynamicStates;
+
+	VkPipelineVertexInputStateCreateInfo vertexInputStateCreateInfo;
+	memset(&vertexInputStateCreateInfo, 0, sizeof(vertexInputStateCreateInfo));
+	vertexInputStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+	vertexInputStateCreateInfo.vertexAttributeDescriptionCount = 0;
+	vertexInputStateCreateInfo.pVertexBindingDescriptions = NULL;
+	vertexInputStateCreateInfo.vertexAttributeDescriptionCount = 0;
+	vertexInputStateCreateInfo.pVertexAttributeDescriptions = NULL;
+
+	VkPipelineInputAssemblyStateCreateInfo inputAssemblyStateCreateInfo;
+	memset(&inputAssemblyStateCreateInfo, 0, sizeof(inputAssemblyStateCreateInfo));
+	inputAssemblyStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+	inputAssemblyStateCreateInfo.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+	inputAssemblyStateCreateInfo.primitiveRestartEnable = VK_FALSE;
+
+	VkViewport viewPort;
+	memset(&viewPort, 0, sizeof(viewPort));
+	viewPort.x = 0.0f;
+	viewPort.y = 0.0f;
+	viewPort.width = (float)app->vulkanSurfaceExtent.width;
+	viewPort.height = (float)app->vulkanSurfaceExtent.height;
+	viewPort.minDepth = 0.0f;
+	viewPort.maxDepth = 1.0f;
+
+	VkRect2D scissors;
+	memset(&scissors, 0, sizeof(scissors));
+	scissors.offset.x = 0;
+	scissors.offset.y = 0;
+	scissors.extent = app->vulkanSurfaceExtent;
+
+	VkPipelineViewportStateCreateInfo  viewPortState;
+	memset(&viewPortState, 0, sizeof(viewPortState));
+	viewPortState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+	viewPortState.viewportCount = 1;
+	viewPortState.pViewports = &viewPort;
+	viewPortState.scissorCount = 1;
+	viewPortState.pScissors = &scissors;
+
+	VkPipelineRasterizationStateCreateInfo rasterizer;
+	memset(&rasterizer, 0, sizeof(rasterizer));
+	rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+	rasterizer.depthClampEnable = VK_FALSE;
+	rasterizer.rasterizerDiscardEnable = VK_FALSE;
+	rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+	rasterizer.lineWidth = 1.0f;
+	rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+	rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
+	rasterizer.depthBiasEnable = VK_FALSE;
+	rasterizer.depthBiasConstantFactor = 0.0f;
+	rasterizer.depthBiasClamp = 0.0f;
+	rasterizer.depthBiasSlopeFactor = 0.0f;
+
+	VkPipelineMultisampleStateCreateInfo multisampling;
+	memset(&multisampling, 0, sizeof(multisampling));
+	multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+	multisampling.sampleShadingEnable = VK_FALSE;
+	multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+	multisampling.minSampleShading = 1.0f;
+	multisampling.pSampleMask = NULL;
+	multisampling.alphaToCoverageEnable = VK_FALSE;
+	multisampling.alphaToOneEnable = VK_FALSE;
+
+	VkPipelineColorBlendAttachmentState colorBlend;
+	memset(&colorBlend, 0, sizeof(colorBlend));
+	colorBlend.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+	colorBlend.blendEnable = VK_FALSE;
+	colorBlend.srcColorBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
+	colorBlend.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
+	colorBlend.colorBlendOp = VK_BLEND_OP_ADD; // Optional
+	colorBlend.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
+	colorBlend.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
+	colorBlend.alphaBlendOp = VK_BLEND_OP_ADD; // Optional
+
+	VkPipelineColorBlendStateCreateInfo colorBlending;
+	memset(&colorBlending, 0, sizeof(colorBlending));
+	colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+	colorBlending.logicOpEnable = VK_FALSE;
+	colorBlending.logicOp = VK_LOGIC_OP_COPY; // Optional
+	colorBlending.attachmentCount = 1;
+	colorBlending.pAttachments = &colorBlend;
+	colorBlending.blendConstants[0] = 0.0f; // Optional
+	colorBlending.blendConstants[1] = 0.0f; // Optional
+	colorBlending.blendConstants[2] = 0.0f; // Optional
+	colorBlending.blendConstants[3] = 0.0f; // Optional
+
+	VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo;
+	memset(&pipelineLayoutCreateInfo, 0, sizeof(pipelineLayoutCreateInfo));
+	pipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	pipelineLayoutCreateInfo.setLayoutCount = 0;
+	pipelineLayoutCreateInfo.pSetLayouts = NULL;
+	pipelineLayoutCreateInfo.pushConstantRangeCount = 0;
+	pipelineLayoutCreateInfo.pPushConstantRanges = NULL;
+
+	err = vkCreatePipelineLayout(app->vulkanDevice, &pipelineLayoutCreateInfo, NULL, &app->vulkanPipelineLayout);
+	assert(!err);
+
+	VkGraphicsPipelineCreateInfo pipelineCreateInfo;
+	memset(&pipelineCreateInfo, 0, sizeof(pipelineCreateInfo));
+	pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+	pipelineCreateInfo.stageCount = 2;
+	pipelineCreateInfo.pStages = shaderStageInfos;
+	pipelineCreateInfo.pVertexInputState = &vertexInputStateCreateInfo;
+	pipelineCreateInfo.pInputAssemblyState = &inputAssemblyStateCreateInfo;
+	pipelineCreateInfo.pViewportState = &viewPortState;
+	pipelineCreateInfo.pRasterizationState = &rasterizer;
+	pipelineCreateInfo.pMultisampleState = &multisampling;
+	pipelineCreateInfo.pDepthStencilState = NULL;
+	pipelineCreateInfo.pColorBlendState = &colorBlending;
+	pipelineCreateInfo.pDynamicState = &dynamicStateCreateInfo;
+	pipelineCreateInfo.layout = app->vulkanPipelineLayout;
+	pipelineCreateInfo.renderPass = app->vulkanRenderPass;
+	pipelineCreateInfo.subpass = 0;
+	pipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE;
+	pipelineCreateInfo.basePipelineIndex = -1;
+
+	err = vkCreateGraphicsPipelines(app->vulkanDevice, VK_NULL_HANDLE, 1, &pipelineCreateInfo, NULL, &app->vulkanGraphicsPipeline);
+	assert(!err);
+
+
+
 }
 
 void destroy(Application* app) {
+	vkDestroyPipeline(app->vulkanDevice, app->vulkanGraphicsPipeline, NULL);
+	vkDestroyPipelineLayout(app->vulkanDevice, app->vulkanPipelineLayout, NULL);
 	vkDestroyRenderPass(app->vulkanDevice, app->vulkanRenderPass, NULL);
 	for (size_t i = 0; i < app->vulkanSwapChainImageViewsSize; i++) {
 		vkDestroyImageView(app->vulkanDevice, app->vulkanSwapChainImageViews[i], NULL);
@@ -314,9 +459,16 @@ void getWindowSize(Application* app, int* width, int* height) {
 }
 
 void loadShaders(Application* app) {
-	FILE* vertexFile = fopen("shader/vert.spv", "ab+");
-	FILE* fragmeFile = fopen("shader/frag.spv", "ab+");
+	VkResult err = VK_SUCCESS;
+
+	const char vertexPath[] = PROJECT_PATH("shader\\vert.spv");
+	const char fragmePath[] = PROJECT_PATH("shader\\frag.spv");
+
+	FILE* vertexFile = fopen(vertexPath, "rb");
+	FILE* fragmeFile = fopen(fragmePath, "rb");
 	assert(vertexFile && fragmeFile);
+	fseek(vertexFile, 0L, SEEK_END);
+	fseek(fragmeFile, 0L, SEEK_END);
 	size_t vertexSize = ftell(vertexFile);
 	size_t fragmeSize = ftell(fragmeFile);
 	assert(vertexSize && fragmeSize);
@@ -332,7 +484,7 @@ void loadShaders(Application* app) {
 		fragmeProgram[i] = getc(fragmeFile);
 	}
 	VkShaderModuleCreateInfo shadersInfo[2];
-	memset(shadersInfo, 0, ARRAY_SIZE(shadersInfo));
+	memset(shadersInfo, 0, sizeof(shadersInfo));
 	shadersInfo[0].sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
 	shadersInfo[1].sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
 
@@ -341,8 +493,10 @@ void loadShaders(Application* app) {
 	shadersInfo[1].codeSize = fragmeSize;
 	shadersInfo[1].pCode = fragmeProgram;
 
-	vkCreateShaderModule(app->vulkanDevice, &shadersInfo[0], NULL, &app->vulkanShaderModules[0]);
-	vkCreateShaderModule(app->vulkanDevice, &shadersInfo[1], NULL, &app->vulkanShaderModules[1]);
+	err = vkCreateShaderModule(app->vulkanDevice, &shadersInfo[0], NULL, &app->vulkanShaderModules[0]);
+	assert(!err);
+	err = vkCreateShaderModule(app->vulkanDevice, &shadersInfo[1], NULL, &app->vulkanShaderModules[1]);
+	assert(!err);
 
 	free(vertexProgram);
 	free(fragmeFile);

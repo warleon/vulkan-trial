@@ -33,11 +33,16 @@ typedef struct {
 	uint32_t vulkanSwapChainImagesSize;
 	uint32_t vulkanSwapChainImageViewsSize;
 
+	VkFramebuffer* vulkanFramebuffers;
+	uint32_t vulkanFrameBuffersSize;
+
 	VkRenderPass vulkanRenderPass;
 	VkPipeline vulkanGraphicsPipeline;
 	VkPipelineLayout vulkanPipelineLayout;
 	VkShaderModule vulkanShaderModules[2];
 
+	VkCommandPool vulkanCommandPool;
+	VkCommandBuffer vulkanCommandBuffer;
 
 	VkPhysicalDevice vulkanPhysicalDevice;
 	VkPhysicalDeviceFeatures vulkanPhysicalDeviceFeatures;
@@ -51,14 +56,21 @@ typedef struct {
 
 	uint32_t enabledVulkanGlobalExtensionsSize;
 	uint32_t enabledVulkanValidationLayersSize;
-	char* enabledVulkanGlobalExtensions[64];
-	char* enabledVulkanValidationLayers[64];
+	char* enabledVulkanGlobalExtensions[256];
+	char* enabledVulkanValidationLayers[256];
+
+
+	VkSemaphore imageAvailable;
+	VkSemaphore	renderFinished;
+	VkFence inFlight;
 
 	VkExtensionProperties* properties;
 	VkLayerProperties* layers;
 	VkPhysicalDevice* physicalDevices;
 	VkExtensionProperties* deviceExtensionProperties;
 	char** deviceExtensionPropertiesNames;
+	uint32_t deviceExtensionPropertiesNamesSize;
+
 
 
 }	Application;
@@ -73,6 +85,10 @@ void initSwapChain(Application*);
 void initImageViews(Application*);
 void initRenderPass(Application*);
 void initGraphicsPipeline(Application*);
+void initFrameBuffer(Application*);
+void initCommandPool(Application*);
+void initCommandBuffer(Application*);
+void initSyncObjects(Application*);
 void destroy(Application*);
 
 void getWindowSize(Application*, int*, int*);
@@ -83,3 +99,5 @@ void loadShaders(Application*);
 int isDeviceOkAndSetQueueIndex(Application*, VkPhysicalDevice);
 void querySwapChainSupport(Application*, VkPhysicalDevice);
 void unquerySwapChainSupport(Application*);
+void recordCommandbuffer(Application*, uint32_t);
+void drawFrame(Application*);

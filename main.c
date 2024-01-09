@@ -7,10 +7,10 @@
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 WCHAR buffer[256 * 16] = { 0 };
 
+Application app;
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 	PSTR szCmdLine, int iCmdShow)
 {
-	Application app;
 	static TCHAR szAppName[] = TEXT("Vulkan Trial");
 	HWND hwnd;
 	MSG msg = {
@@ -71,12 +71,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 		//PlaySound(TEXT("hellowin.wav"), NULL, SND_FILENAME | SND_ASYNC);
 		return 0;
 	case WM_PAINT:
-		hdc = BeginPaint(hwnd, &ps);
+//		hdc = BeginPaint(hwnd, &ps);
+//		GetClientRect(hwnd, &rect);
+//		//DrawText(hdc, buffer, -1, &rect, DT_SINGLELINE | DT_CENTER | DT_VCENTER);
+//		EndPaint(hwnd, &ps);
+		drawFrame(&app);
 
-		GetClientRect(hwnd, &rect);
-
-		//DrawText(hdc, buffer, -1, &rect, DT_SINGLELINE | DT_CENTER | DT_VCENTER);
-		EndPaint(hwnd, &ps);
 		return 0;
 
 	case WM_DESTROY:

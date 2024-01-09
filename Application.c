@@ -21,6 +21,10 @@ void init(Application* app, const char* name, const char* engineName, HINSTANCE 
 	initSwapChain(app);
 	initRenderPass(app);
 	initGraphicsPipeline(app);
+	initFrameBuffer(app);
+	initCommandPool(app);
+	initCommandBuffer(app);
+	initSyncObjects(app);
 }
 void initInstance(Application* app) {
 	VkResult err;
@@ -40,7 +44,7 @@ void initInstance(Application* app) {
 	app->properties = malloc(sizeof(VkExtensionProperties) * count);
 	assert(app->properties);
 	err = vkEnumerateInstanceExtensionProperties(NULL, &count, app->properties);
-	assert(!err && count < 64);
+	assert(!err && count <= 256);
 	for (size_t i = 0; i < count; i++) {
 		app->enabledVulkanGlobalExtensions[app->enabledVulkanGlobalExtensionsSize++] = app->properties[i].extensionName;
 	}
@@ -50,8 +54,9 @@ void initInstance(Application* app) {
 	app->layers = malloc(sizeof(VkLayerProperties) * count);
 	assert(app->layers);
 	err = vkEnumerateInstanceLayerProperties(&count, app->layers);
-	assert(!err && count < 64);
+	assert(!err && count <= 256);
 	for (size_t i = 0; i < count; i++) {
+		if (!strcmp(app->layers[i].layerName, "VK_LAYER_LUNARG_gfxreconstruct"))continue;
 		app->enabledVulkanValidationLayers[app->enabledVulkanValidationLayersSize++] = app->layers[i].layerName;
 	}
 
@@ -94,7 +99,7 @@ void initPhisicalDevice(Application* app) {
 	assert(!err);
 
 	uint32_t ok = 0;
-	for (size_t i = 0; i < count; i++) {
+	for (uint32_t i = 0; i < count; i++) {
 		ok = isDeviceOkAndSetQueueIndex(app, app->physicalDevices[i]);
 		if (ok) {
 			app->vulkanPhysicalDevice = app->physicalDevices[i];
@@ -116,13 +121,17 @@ void initDevice(Application* app) {
 	assert(!err);
 	app->deviceExtensionPropertiesNames = malloc(sizeof(char*) * count);
 	assert(app->deviceExtensionPropertiesNames);
-	for (size_t i = 0; i < count; i++) {
-		app->deviceExtensionPropertiesNames[i] = &app->deviceExtensionProperties[i].extensionName;
+	for (uint32_t i = 0; i < count; i++) {
+		if (!strcmp(app->deviceExtensionProperties[i].extensionName, "VK_EXT_buffer_device_address"))continue;
+		if (!strcmp(app->deviceExtensionProperties[i].extensionName, "VK_EXT_image_2d_view_of_3d"))continue;
+		if (!strcmp(app->deviceExtensionProperties[i].extensionName, "VK_KHR_dynamic_rendering"))continue;
+
+		app->deviceExtensionPropertiesNames[app->deviceExtensionPropertiesNamesSize++] = &app->deviceExtensionProperties[i].extensionName;
 	}
 
 	app->graphicsQueueFamilyPriority = 1.0f;
 
-	app->vulkanDeviceQueueCreateInfo[0].sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+	app->vulkanDeviceQueueCreateInfo[0].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
 	app->vulkanDeviceQueueCreateInfo[0].queueFamilyIndex = app->graphicsQueueFamilyIndex - 1;
 	app->vulkanDeviceQueueCreateInfo[0].queueCount = 1;
 	app->vulkanDeviceQueueCreateInfo[0].pQueuePriorities = &app->graphicsQueueFamilyPriority;
@@ -130,13 +139,13 @@ void initDevice(Application* app) {
 	vkGetPhysicalDeviceFeatures(app->vulkanPhysicalDevice, &app->vulkanPhysicalDeviceFeatures);
 
 	app->vulkanDeviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-	app->vulkanDeviceCreateInfo.pQueueCreateInfos = app->vulkanDeviceQueueCreateInfo;
 	app->vulkanDeviceCreateInfo.queueCreateInfoCount = ARRAY_SIZE(app->vulkanDeviceQueueCreateInfo);
+	app->vulkanDeviceCreateInfo.pQueueCreateInfos = app->vulkanDeviceQueueCreateInfo;
 	app->vulkanDeviceCreateInfo.pEnabledFeatures = &app->vulkanPhysicalDeviceFeatures;
 	app->vulkanDeviceCreateInfo.enabledLayerCount = app->enabledVulkanValidationLayersSize;
 	app->vulkanDeviceCreateInfo.ppEnabledLayerNames = app->enabledVulkanValidationLayers;
 	app->vulkanDeviceCreateInfo.ppEnabledExtensionNames = app->deviceExtensionPropertiesNames;
-	app->vulkanDeviceCreateInfo.enabledExtensionCount = count;
+	app->vulkanDeviceCreateInfo.enabledExtensionCount = app->deviceExtensionPropertiesNamesSize;
 
 	err = vkCreateDevice(app->vulkanPhysicalDevice, &app->vulkanDeviceCreateInfo, NULL, &app->vulkanDevice);
 	assert(!err);
@@ -165,8 +174,9 @@ void initSwapChain(Application* app) {
 		}
 	}
 
-	if (app->vulkanSurfaceCapabilities.currentExtent.width != (uint32_t)-1) {
-		app->vulkanSurfaceExtent = app->vulkanSurfaceCapabilities.currentExtent;
+	if (app->vulkanSurfaceCapabilities.currentExtent.width != UINT32_MAX) {
+		app->vulkanSurfaceExtent.height = app->vulkanSurfaceCapabilities.currentExtent.height;
+		app->vulkanSurfaceExtent.width = app->vulkanSurfaceCapabilities.currentExtent.width;
 	}
 	else {
 		unsigned int width = 0, height = 0;
@@ -196,7 +206,8 @@ void initSwapChain(Application* app) {
 	app->vulkanSwapChainCreateInfo.minImageCount = imageCount;
 	app->vulkanSwapChainCreateInfo.imageFormat = app->vulkanSurfaceChosenFormat.format;
 	app->vulkanSwapChainCreateInfo.imageColorSpace = app->vulkanSurfaceChosenFormat.colorSpace;
-	app->vulkanSwapChainCreateInfo.imageExtent = app->vulkanSurfaceExtent;
+	app->vulkanSwapChainCreateInfo.imageExtent.height = app->vulkanSurfaceExtent.height;
+	app->vulkanSwapChainCreateInfo.imageExtent.width = app->vulkanSurfaceExtent.width;
 	app->vulkanSwapChainCreateInfo.imageArrayLayers = 1;
 	app->vulkanSwapChainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 	app->vulkanSwapChainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -215,6 +226,9 @@ void initSwapChain(Application* app) {
 	assert(app->vulkanSwapChainImages);
 	err = vkGetSwapchainImagesKHR(app->vulkanDevice, app->vulkanSwapChain, &app->vulkanSwapChainImagesSize, app->vulkanSwapChainImages);
 	assert(!err);
+	//	for (uint32_t i = 0; i < app->vulkanSwapChainImagesSize; i++){
+	//		app->vulkanSwapChainImages[i].usage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+	//	}
 }
 
 void initImageViews(Application* app) {
@@ -239,6 +253,7 @@ void initImageViews(Application* app) {
 		createInfo.subresourceRange.levelCount = 1;
 		createInfo.subresourceRange.baseArrayLayer = 0;
 		createInfo.subresourceRange.layerCount = 1;
+
 
 		err = vkCreateImageView(app->vulkanDevice, &createInfo, NULL, &app->vulkanSwapChainImageViews);
 		assert(!err);
@@ -270,6 +285,15 @@ void initRenderPass(Application* app) {
 	subpass.colorAttachmentCount = 1;
 	subpass.pColorAttachments = &colorAttachmentRef;
 
+	VkSubpassDependency dependency;
+	memset(&dependency, 0, sizeof(dependency));
+	dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+	dependency.dstSubpass = 0;
+	dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependency.srcAccessMask = 0;
+	dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
 	VkRenderPassCreateInfo renderPassCreateInfo;
 	memset(&renderPassCreateInfo, 0, sizeof(renderPassCreateInfo));
 	renderPassCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
@@ -277,6 +301,9 @@ void initRenderPass(Application* app) {
 	renderPassCreateInfo.pAttachments = &colorAttachment;
 	renderPassCreateInfo.subpassCount = 1;
 	renderPassCreateInfo.pSubpasses = &subpass;
+	renderPassCreateInfo.dependencyCount = 1;
+	renderPassCreateInfo.pDependencies = &dependency;
+
 
 	err = vkCreateRenderPass(app->vulkanDevice, &renderPassCreateInfo, NULL, &app->vulkanRenderPass);
 	assert(!err);
@@ -321,28 +348,28 @@ void initGraphicsPipeline(Application* app) {
 	inputAssemblyStateCreateInfo.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 	inputAssemblyStateCreateInfo.primitiveRestartEnable = VK_FALSE;
 
-	VkViewport viewPort;
-	memset(&viewPort, 0, sizeof(viewPort));
-	viewPort.x = 0.0f;
-	viewPort.y = 0.0f;
-	viewPort.width = (float)app->vulkanSurfaceExtent.width;
-	viewPort.height = (float)app->vulkanSurfaceExtent.height;
-	viewPort.minDepth = 0.0f;
-	viewPort.maxDepth = 1.0f;
-
-	VkRect2D scissors;
-	memset(&scissors, 0, sizeof(scissors));
-	scissors.offset.x = 0;
-	scissors.offset.y = 0;
-	scissors.extent = app->vulkanSurfaceExtent;
+	//	VkViewport viewPort;
+	//	memset(&viewPort, 0, sizeof(viewPort));
+	//	viewPort.x = 0.0f;
+	//	viewPort.y = 0.0f;
+	//	viewPort.width = app->vulkanSurfaceExtent.width;//implicit conversion
+	//	viewPort.height = app->vulkanSurfaceExtent.height;//implicit conversion
+	//	viewPort.minDepth = 0.0f;
+	//	viewPort.maxDepth = 1.0f;
+	//
+	//	VkRect2D scissors;
+	//	memset(&scissors, 0, sizeof(scissors));
+	//	scissors.offset.x = 0;
+	//	scissors.offset.y = 0;
+	//	scissors.extent = app->vulkanSurfaceExtent;
 
 	VkPipelineViewportStateCreateInfo  viewPortState;
 	memset(&viewPortState, 0, sizeof(viewPortState));
 	viewPortState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
 	viewPortState.viewportCount = 1;
-	viewPortState.pViewports = &viewPort;
+	//	viewPortState.pViewports = &viewPort;
 	viewPortState.scissorCount = 1;
-	viewPortState.pScissors = &scissors;
+	//	viewPortState.pScissors = &scissors;
 
 	VkPipelineRasterizationStateCreateInfo rasterizer;
 	memset(&rasterizer, 0, sizeof(rasterizer));
@@ -405,7 +432,7 @@ void initGraphicsPipeline(Application* app) {
 	VkGraphicsPipelineCreateInfo pipelineCreateInfo;
 	memset(&pipelineCreateInfo, 0, sizeof(pipelineCreateInfo));
 	pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-	pipelineCreateInfo.stageCount = 2;
+	pipelineCreateInfo.stageCount = ARRAY_SIZE(shaderStageInfos);
 	pipelineCreateInfo.pStages = shaderStageInfos;
 	pipelineCreateInfo.pVertexInputState = &vertexInputStateCreateInfo;
 	pipelineCreateInfo.pInputAssemblyState = &inputAssemblyStateCreateInfo;
@@ -423,12 +450,81 @@ void initGraphicsPipeline(Application* app) {
 
 	err = vkCreateGraphicsPipelines(app->vulkanDevice, VK_NULL_HANDLE, 1, &pipelineCreateInfo, NULL, &app->vulkanGraphicsPipeline);
 	assert(!err);
+}
+void initFrameBuffer(Application* app) {
+	VkResult err = VK_SUCCESS;
+	app->vulkanFrameBuffersSize = app->vulkanSwapChainImageViewsSize;
+	app->vulkanFramebuffers = malloc(sizeof(VkFramebuffer) * app->vulkanFrameBuffersSize);
+	assert(app->vulkanFramebuffers);
+
+	VkFramebufferCreateInfo frameBufferInfo;
+	memset(&frameBufferInfo, 0, sizeof(frameBufferInfo));
+	frameBufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+	frameBufferInfo.renderPass = app->vulkanRenderPass;
+	frameBufferInfo.attachmentCount = 1;
+	frameBufferInfo.width = app->vulkanSurfaceExtent.width;
+	frameBufferInfo.height = app->vulkanSurfaceExtent.height;
+	frameBufferInfo.layers = 1;
 
 
+	for (size_t i = 0; i < app->vulkanFrameBuffersSize; i++) {
+		VkImageView const* attachments = &app->vulkanSwapChainImageViews[i];
+		frameBufferInfo.pAttachments = attachments;
 
+		err = vkCreateFramebuffer(app->vulkanDevice, &frameBufferInfo, NULL, app->vulkanFramebuffers[i]);
+		assert(!err);
+	}
+}
+void initCommandPool(Application* app) {
+	VkResult err = VK_SUCCESS;
+	VkCommandPoolCreateInfo commandPoolInfo;
+	memset(&commandPoolInfo, 0, sizeof(commandPoolInfo));
+	commandPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	commandPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+	commandPoolInfo.queueFamilyIndex = app->graphicsQueueFamilyIndex - 1;
+	err = vkCreateCommandPool(app->vulkanDevice, &commandPoolInfo, NULL, &app->vulkanCommandPool);
+	assert(!err);
+}
+
+void initCommandBuffer(Application* app) {
+	VkResult err = VK_SUCCESS;
+	VkCommandBufferAllocateInfo bufferInfo;
+	memset(&bufferInfo, 0, sizeof(bufferInfo));
+	bufferInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	bufferInfo.commandPool = app->vulkanCommandPool;
+	bufferInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	bufferInfo.commandBufferCount = 1;
+
+	err = vkAllocateCommandBuffers(app->vulkanDevice, &bufferInfo, &app->vulkanCommandBuffer);
+	assert(!err);
+
+}
+void initSyncObjects(Application* app) {
+	VkResult err = VK_SUCCESS;
+	VkSemaphoreCreateInfo semaphoreInfo;
+	memset(&semaphoreInfo, 0, sizeof(semaphoreInfo));
+	semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+	VkFenceCreateInfo fenceInfo;
+	memset(&fenceInfo, 0, sizeof(fenceInfo));
+	fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+	fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+	err = vkCreateSemaphore(app->vulkanDevice, &semaphoreInfo, NULL, &app->imageAvailable);
+	assert(!err);
+	err = vkCreateSemaphore(app->vulkanDevice, &semaphoreInfo, NULL, &app->renderFinished);
+	assert(!err);
+	err = vkCreateFence(app->vulkanDevice, &fenceInfo, NULL, &app->inFlight);
+	assert(!err);
 }
 
 void destroy(Application* app) {
+	vkDestroySemaphore(app->vulkanDevice, app->imageAvailable, NULL);
+	vkDestroySemaphore(app->vulkanDevice, app->renderFinished, NULL);
+	vkDestroyFence(app->vulkanDevice, app->inFlight, NULL);
+
+	vkDestroyCommandPool(app->vulkanDevice, app->vulkanCommandPool, NULL);
+	for (size_t i = 0; i < app->vulkanFrameBuffersSize; i++) {
+		vkDestroyFramebuffer(app->vulkanDevice, app->vulkanFramebuffers[i], NULL);
+	}
 	vkDestroyPipeline(app->vulkanDevice, app->vulkanGraphicsPipeline, NULL);
 	vkDestroyPipelineLayout(app->vulkanDevice, app->vulkanPipelineLayout, NULL);
 	vkDestroyRenderPass(app->vulkanDevice, app->vulkanRenderPass, NULL);
@@ -456,6 +552,7 @@ void getWindowSize(Application* app, int* width, int* height) {
 
 	*width = rect.right - rect.left;
 	*height = rect.bottom - rect.top;
+	//assert(*width > 0 && *height > 0);
 }
 
 void loadShaders(Application* app) {
@@ -503,7 +600,7 @@ void loadShaders(Application* app) {
 }
 
 int isDeviceOkAndSetQueueIndex(Application* app, VkPhysicalDevice device) {
-	VkResult err;
+	VkResult err = VK_SUCCESS;
 	uint32_t count = 0;
 	VkBool32 hasSurfaceSupport = 0;
 	VkBool32 hasExtension = 0;
@@ -521,18 +618,22 @@ int isDeviceOkAndSetQueueIndex(Application* app, VkPhysicalDevice device) {
 	assert(extensionProperties);
 	err = vkEnumerateDeviceExtensionProperties(device, NULL, &count, extensionProperties);
 	assert(!err);
-	for (size_t i = 0; i < count; i++) {
-		hasExtension = hasExtension || !strcmp(VK_KHR_SWAPCHAIN_EXTENSION_NAME, extensionProperties[i].extensionName);
+	for (uint32_t i = 0; i < count; i++) {
+		hasExtension = !strcmp(VK_KHR_SWAPCHAIN_EXTENSION_NAME, extensionProperties[i].extensionName);
+		if (hasExtension)break;
 	}
 	free(extensionProperties);
+	extensionProperties = NULL;
 
 	count = 0;
 	vkGetPhysicalDeviceQueueFamilyProperties(device, &count, NULL);
-	assert(!err);
 	assert(count);
 	VkQueueFamilyProperties* queueFamilyProperties = malloc(sizeof(VkQueueFamilyProperties) * count);
 	assert(queueFamilyProperties);
-	for (size_t i = 0; i < count; i++) {
+	memset(queueFamilyProperties, 0, sizeof(VkQueueFamilyProperties) * count);
+	vkGetPhysicalDeviceQueueFamilyProperties(device, &count, queueFamilyProperties);
+	assert(count);
+	for (uint32_t i = 0; i < count; i++) {
 		if (queueFamilyProperties[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
 			err = vkGetPhysicalDeviceSurfaceSupportKHR(device, i, app->vulkanSurface, &hasSurfaceSupport);
 			assert(!err);
@@ -546,6 +647,7 @@ int isDeviceOkAndSetQueueIndex(Application* app, VkPhysicalDevice device) {
 		}
 	}
 	free(queueFamilyProperties);
+	queueFamilyProperties = NULL;
 
 
 	return (app->graphicsQueueFamilyIndex > 0) && hasSurfaceSupport && hasExtension;
@@ -553,14 +655,19 @@ int isDeviceOkAndSetQueueIndex(Application* app, VkPhysicalDevice device) {
 
 void querySwapChainSupport(Application* app, VkPhysicalDevice device) {
 	VkResult err;
+
 	err = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, app->vulkanSurface, &app->vulkanSurfaceCapabilities);
 	assert(!err);
+
+
 	err = vkGetPhysicalDeviceSurfaceFormatsKHR(device, app->vulkanSurface, &app->vulkanSurfaceFormatsSize, NULL);
 	assert(!err && app->vulkanSurfaceFormatsSize);
 	app->vulkanSurfaceFormats = malloc(sizeof(VkSurfaceFormatKHR) * app->vulkanSurfaceFormatsSize);
 	assert(app->vulkanSurfaceFormats);
 	err = vkGetPhysicalDeviceSurfaceFormatsKHR(device, app->vulkanSurface, &app->vulkanSurfaceFormatsSize, app->vulkanSurfaceFormats);
 	assert(!err);
+
+
 	err = vkGetPhysicalDeviceSurfacePresentModesKHR(device, app->vulkanSurface, &app->vulkanSurfacePresentModesSize, NULL);
 	assert(!err && app->vulkanSurfacePresentModesSize);
 	app->vulkanSurfacePresentModes = malloc(sizeof(VkPresentModeKHR) * app->vulkanSurfacePresentModesSize);
@@ -575,4 +682,97 @@ void unquerySwapChainSupport(Application* app) {
 	if (app->vulkanSurfacePresentModes)
 		free(app->vulkanSurfacePresentModes);
 	app->vulkanSurfacePresentModes = NULL;
+}
+void recordCommandbuffer(Application* app, uint32_t frame) {
+	VkResult err = VK_SUCCESS;
+	VkCommandBufferBeginInfo beginInfo;
+	memset(&beginInfo, 0, sizeof(beginInfo));
+	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+
+	err = vkBeginCommandBuffer(app->vulkanCommandBuffer, &beginInfo);
+	assert(!err);
+
+
+	VkClearValue clearColor;
+	memset(&clearColor, 0, sizeof(clearColor));
+	clearColor.color.float32[3] = 1.0f;
+
+	VkRenderPassBeginInfo renderPassInfo;
+	memset(&renderPassInfo, 0, sizeof(renderPassInfo));
+
+	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+	renderPassInfo.renderPass = app->vulkanRenderPass;
+	renderPassInfo.framebuffer = app->vulkanFramebuffers[frame];
+	renderPassInfo.renderArea.offset.x = 0;
+	renderPassInfo.renderArea.offset.y = 0;
+	renderPassInfo.renderArea.extent.height = app->vulkanSurfaceExtent.height;
+	renderPassInfo.renderArea.extent.width = app->vulkanSurfaceExtent.width;
+	renderPassInfo.clearValueCount = 1;
+	renderPassInfo.pClearValues = &clearColor;
+
+	VkViewport viewPort;
+	memset(&viewPort, 0, sizeof(viewPort));
+	viewPort.x = 0.0f;
+	viewPort.y = 0.0f;
+	viewPort.width = app->vulkanSurfaceExtent.width;
+	viewPort.height = app->vulkanSurfaceExtent.height;
+	viewPort.minDepth = 0.0f;
+	viewPort.maxDepth = 1.0f;
+
+	VkRect2D scissors;
+	memset(&scissors, 0, sizeof(scissors));
+	scissors.offset.x = 0;
+	scissors.offset.y = 0;
+	scissors.extent.height = app->vulkanSurfaceExtent.height;
+	scissors.extent.width = app->vulkanSurfaceExtent.width;
+
+	vkCmdBeginRenderPass(app->vulkanCommandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+	vkCmdBindPipeline(app->vulkanCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, app->vulkanGraphicsPipeline);
+	vkCmdSetViewport(app->vulkanCommandBuffer, 0, 1, &viewPort);
+	vkCmdSetScissor(app->vulkanCommandBuffer, 0, 1, &scissors);
+	vkCmdDraw(app->vulkanCommandBuffer, 3, 1, 0, 0);
+	vkCmdEndRenderPass(app->vulkanCommandBuffer);
+
+	err = vkEndCommandBuffer(app->vulkanCommandBuffer);
+	assert(!err);
+
+}
+void drawFrame(Application* app) {
+	VkResult err = VK_SUCCESS;
+	uint32_t frame = 0;
+	vkWaitForFences(app->vulkanDevice, 1, &app->inFlight, VK_TRUE, UINT64_MAX);
+	vkResetFences(app->vulkanDevice, 1, &app->inFlight);
+
+	err = vkAcquireNextImageKHR(app->vulkanDevice, app->vulkanSwapChain, UINT64_MAX, app->imageAvailable, VK_NULL_HANDLE, &frame);
+	assert(!err);
+	err = vkResetCommandBuffer(app->vulkanCommandBuffer, 0);
+	assert(!err);
+	recordCommandbuffer(app, frame);
+
+	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+	VkSubmitInfo submitInfo;
+	memset(&submitInfo, 0, sizeof(submitInfo));
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.waitSemaphoreCount = 1;
+	submitInfo.pWaitSemaphores = &app->imageAvailable;
+	submitInfo.pWaitDstStageMask = waitStages;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &app->vulkanCommandBuffer;
+	submitInfo.signalSemaphoreCount = 1;
+	submitInfo.pSignalSemaphores = &app->renderFinished;
+	err = vkQueueSubmit(app->vulkanQueue, 1, &submitInfo, app->inFlight);
+	assert(!err);
+
+	VkPresentInfoKHR presentInfo;
+	memset(&presentInfo, 0, sizeof(presentInfo));
+	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+	presentInfo.waitSemaphoreCount = 1;
+	presentInfo.pWaitSemaphores = &app->renderFinished;
+	presentInfo.swapchainCount = 1;
+	presentInfo.pSwapchains = &app->vulkanSwapChain;
+	presentInfo.pResults = &err;
+	vkQueuePresentKHR(app->vulkanQueue, &presentInfo);
+	assert(!err);
+
+
 }

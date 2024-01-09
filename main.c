@@ -76,6 +76,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 //		//DrawText(hdc, buffer, -1, &rect, DT_SINGLELINE | DT_CENTER | DT_VCENTER);
 //		EndPaint(hwnd, &ps);
 		drawFrame(&app);
+		//UpdateWindow(hwnd);
 
 		return 0;
 

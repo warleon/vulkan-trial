@@ -73,6 +73,8 @@ typedef struct {
 
 
 
+	uint32_t frame;
+
 }	Application;
 
 

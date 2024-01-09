@@ -19,6 +19,7 @@ void init(Application* app, const char* name, const char* engineName, HINSTANCE 
 	initPhisicalDevice(app);
 	initDevice(app);
 	initSwapChain(app);
+	initImageViews(app);
 	initRenderPass(app);
 	initGraphicsPipeline(app);
 	initFrameBuffer(app);
@@ -69,7 +70,7 @@ void initInstance(Application* app) {
 	app->vulkanInstanceCreateInfo.ppEnabledLayerNames = app->enabledVulkanValidationLayers;
 
 
-	err = vkCreateInstance(&(app->vulkanInstanceCreateInfo), NULL, &(app->vulkanInstance));
+	err = vkCreateInstance(&app->vulkanInstanceCreateInfo, NULL, &app->vulkanInstance);
 	assert(!(err == VK_ERROR_OUT_OF_HOST_MEMORY));
 	assert(!(err == VK_ERROR_OUT_OF_DEVICE_MEMORY));
 	assert(!(err == VK_ERROR_INITIALIZATION_FAILED));
@@ -140,7 +141,7 @@ void initDevice(Application* app) {
 
 	app->vulkanDeviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 	app->vulkanDeviceCreateInfo.queueCreateInfoCount = ARRAY_SIZE(app->vulkanDeviceQueueCreateInfo);
-	app->vulkanDeviceCreateInfo.pQueueCreateInfos = app->vulkanDeviceQueueCreateInfo;
+	app->vulkanDeviceCreateInfo.pQueueCreateInfos = &app->vulkanDeviceQueueCreateInfo[0];
 	app->vulkanDeviceCreateInfo.pEnabledFeatures = &app->vulkanPhysicalDeviceFeatures;
 	app->vulkanDeviceCreateInfo.enabledLayerCount = app->enabledVulkanValidationLayersSize;
 	app->vulkanDeviceCreateInfo.ppEnabledLayerNames = app->enabledVulkanValidationLayers;
@@ -255,7 +256,7 @@ void initImageViews(Application* app) {
 		createInfo.subresourceRange.layerCount = 1;
 
 
-		err = vkCreateImageView(app->vulkanDevice, &createInfo, NULL, &app->vulkanSwapChainImageViews);
+		err = vkCreateImageView(app->vulkanDevice, &createInfo, NULL, &app->vulkanSwapChainImageViews[i]);
 		assert(!err);
 
 	}
@@ -348,21 +349,6 @@ void initGraphicsPipeline(Application* app) {
 	inputAssemblyStateCreateInfo.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 	inputAssemblyStateCreateInfo.primitiveRestartEnable = VK_FALSE;
 
-	//	VkViewport viewPort;
-	//	memset(&viewPort, 0, sizeof(viewPort));
-	//	viewPort.x = 0.0f;
-	//	viewPort.y = 0.0f;
-	//	viewPort.width = app->vulkanSurfaceExtent.width;//implicit conversion
-	//	viewPort.height = app->vulkanSurfaceExtent.height;//implicit conversion
-	//	viewPort.minDepth = 0.0f;
-	//	viewPort.maxDepth = 1.0f;
-	//
-	//	VkRect2D scissors;
-	//	memset(&scissors, 0, sizeof(scissors));
-	//	scissors.offset.x = 0;
-	//	scissors.offset.y = 0;
-	//	scissors.extent = app->vulkanSurfaceExtent;
-
 	VkPipelineViewportStateCreateInfo  viewPortState;
 	memset(&viewPortState, 0, sizeof(viewPortState));
 	viewPortState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -454,6 +440,7 @@ void initGraphicsPipeline(Application* app) {
 void initFrameBuffer(Application* app) {
 	VkResult err = VK_SUCCESS;
 	app->vulkanFrameBuffersSize = app->vulkanSwapChainImageViewsSize;
+	assert(app->vulkanFrameBuffersSize);
 	app->vulkanFramebuffers = malloc(sizeof(VkFramebuffer) * app->vulkanFrameBuffersSize);
 	assert(app->vulkanFramebuffers);
 
@@ -466,12 +453,11 @@ void initFrameBuffer(Application* app) {
 	frameBufferInfo.height = app->vulkanSurfaceExtent.height;
 	frameBufferInfo.layers = 1;
 
-
 	for (size_t i = 0; i < app->vulkanFrameBuffersSize; i++) {
 		VkImageView const* attachments = &app->vulkanSwapChainImageViews[i];
 		frameBufferInfo.pAttachments = attachments;
 
-		err = vkCreateFramebuffer(app->vulkanDevice, &frameBufferInfo, NULL, app->vulkanFramebuffers[i]);
+		err = vkCreateFramebuffer(app->vulkanDevice, &frameBufferInfo, NULL, &app->vulkanFramebuffers[i]);
 		assert(!err);
 	}
 }
@@ -739,15 +725,14 @@ void recordCommandbuffer(Application* app, uint32_t frame) {
 }
 void drawFrame(Application* app) {
 	VkResult err = VK_SUCCESS;
-	uint32_t frame = 0;
 	vkWaitForFences(app->vulkanDevice, 1, &app->inFlight, VK_TRUE, UINT64_MAX);
 	vkResetFences(app->vulkanDevice, 1, &app->inFlight);
 
-	err = vkAcquireNextImageKHR(app->vulkanDevice, app->vulkanSwapChain, UINT64_MAX, app->imageAvailable, VK_NULL_HANDLE, &frame);
+	err = vkAcquireNextImageKHR(app->vulkanDevice, app->vulkanSwapChain, UINT64_MAX, app->imageAvailable, VK_NULL_HANDLE, &app->frame);
 	assert(!err);
 	err = vkResetCommandBuffer(app->vulkanCommandBuffer, 0);
 	assert(!err);
-	recordCommandbuffer(app, frame);
+	recordCommandbuffer(app, app->frame);
 
 	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
 	VkSubmitInfo submitInfo;
@@ -774,5 +759,5 @@ void drawFrame(Application* app) {
 	vkQueuePresentKHR(app->vulkanQueue, &presentInfo);
 	assert(!err);
 
-
+	app->frame = (app->frame + 1) % app->vulkanSwapChainImagesSize;
 }

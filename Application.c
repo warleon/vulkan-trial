@@ -745,7 +745,7 @@ void drawFrame(Application* app) {
 	submitInfo.pCommandBuffers = &app->vulkanCommandBuffer;
 	submitInfo.signalSemaphoreCount = 1;
 	submitInfo.pSignalSemaphores = &app->renderFinished;
-	err = vkQueueSubmit(app->vulkanQueue, 1, &submitInfo, app->inFlight);
+	err = vkQueueSubmit(app->vulkanQueue[0], 1, &submitInfo, app->inFlight);
 	assert(!err);
 
 	VkPresentInfoKHR presentInfo;
@@ -755,8 +755,9 @@ void drawFrame(Application* app) {
 	presentInfo.pWaitSemaphores = &app->renderFinished;
 	presentInfo.swapchainCount = 1;
 	presentInfo.pSwapchains = &app->vulkanSwapChain;
+	presentInfo.pImageIndices = &app->frame;
 	presentInfo.pResults = &err;
-	vkQueuePresentKHR(app->vulkanQueue, &presentInfo);
+	vkQueuePresentKHR(app->vulkanQueue[0], &presentInfo);
 	assert(!err);
 
 	app->frame = (app->frame + 1) % app->vulkanSwapChainImagesSize;
